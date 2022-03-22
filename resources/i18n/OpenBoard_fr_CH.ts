@@ -261,7 +261,7 @@
     </message>
     <message>
         <source>Smalle Eraser</source>
-        <translation>Gomme fine</translation>
+        <translation type="vanished">Gomme fine</translation>
     </message>
     <message>
         <source>Medium Eraser</source>
@@ -273,7 +273,7 @@
     </message>
     <message>
         <source>Color</source>
-        <translation>Couleur</translation>
+        <translation type="vanished">Couleur</translation>
     </message>
     <message>
         <source>Back</source>
@@ -812,6 +812,34 @@
         <source>Reset grid size</source>
         <translation>Réinitialiser la taille du quadrillage</translation>
     </message>
+    <message>
+        <source>Small Eraser</source>
+        <translation>Gomme fine</translation>
+    </message>
+    <message>
+        <source>Color 1</source>
+        <translation>Couleur 1</translation>
+    </message>
+    <message>
+        <source>Color 2</source>
+        <translation>Couleur 2</translation>
+    </message>
+    <message>
+        <source>Color 3</source>
+        <translation>Couleur 3</translation>
+    </message>
+    <message>
+        <source>Color 4</source>
+        <translation>Couleur 4</translation>
+    </message>
+    <message>
+        <source>Color 5</source>
+        <translation>Couleur 5</translation>
+    </message>
+    <message>
+        <source>Draw intermediate grid lines</source>
+        <translation>Dessiner des lignes intermédiaires</translation>
+    </message>
 </context>
 <context>
     <name>PasswordDialog</name>
@@ -918,6 +946,10 @@
         <source>Grid size</source>
         <translation>Taille du quadrillage</translation>
     </message>
+    <message>
+        <source>Draw intermediate grid lines</source>
+        <translation>Dessiner des lignes intermédiaires</translation>
+    </message>
 </context>
 <context>
     <name>UBBoardController</name>
@@ -976,6 +1008,10 @@
     <message>
         <source>Deleting page %1</source>
         <translation>Supression de la page %1</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Couleur</translation>
     </message>
 </context>
 <context>
@@ -1211,6 +1247,10 @@
         <source>Title page</source>
         <translation>page Titre</translation>
     </message>
+    <message>
+        <source>Empty My Documents</source>
+        <translation type="vanished">Vider Mes Documents</translation>
+    </message>
 </context>
 <context>
     <name>UBDocumentManager</name>
@@ -1327,6 +1367,10 @@ Un nouveau nom vous permettra de conserver l&apos;ancien document.</translation>
     <message>
         <source>Are you sure you want to remove the selected item(s) ?</source>
         <translation>Voulez-vous vraiment supprimer le(s) élément(s) sélectionné(s) ?</translation>
+    </message>
+    <message>
+        <source>Copying page %1/%2</source>
+        <translation>Copie de la page %1/%2 en cours</translation>
     </message>
 </context>
 <context>
@@ -1646,7 +1690,7 @@ Un nouveau nom vous permettra de conserver l&apos;ancien document.</translation>
     </message>
     <message>
         <source>Animations</source>
-        <translation>Animations</translation>
+        <translation type="vanished">Animations</translation>
     </message>
     <message>
         <source>Interactivities</source>
@@ -2202,6 +2246,10 @@ Voulez-vous ignorer les erreurs pour ce serveur ?</translation>
         <source>Cache</source>
         <translation>Spot</translation>
     </message>
+    <message>
+        <source>Axes</source>
+        <translation>Axes</translation>
+    </message>
 </context>
 <context>
     <name>UBTrapFlashController</name>
@@ -2563,6 +2611,13 @@ Veuillez redémarrer l&apos;application pour accéder aux documents mis à jour.
     </message>
 </context>
 <context>
+    <name>XPDFRenderer</name>
+    <message>
+        <source>Processing...</source>
+        <translation>Traitement en cours...</translation>
+    </message>
+</context>
+<context>
     <name>YouTubePublishingDialog</name>
     <message>
         <source>Publish Podcast to YouTube</source>
@@ -2785,7 +2840,7 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Home Page:</source>
-        <translation>Page d&apos;accueil :</translation>
+        <translation>Page d&apos;accueil&#xa0;:</translation>
     </message>
     <message>
         <source>version : …</source>
@@ -2902,6 +2957,34 @@ p, li { white-space: pre-wrap; }
     <message>
         <source>Swap first and second view displays</source>
         <translation>Inverser les écrans élèves</translation>
+    </message>
+    <message>
+        <source>Documents Mode</source>
+        <translation>Mode Documents</translation>
+    </message>
+    <message>
+        <source>Display date column on alphabetical sort</source>
+        <translation>Afficher la colonne des dates avec le tri alphabétique</translation>
+    </message>
+    <message>
+        <source>Empty trash for documents older than</source>
+        <translation>Supprimer de la corbeille les documents de plus de</translation>
+    </message>
+    <message>
+        <source>days</source>
+        <translation>jours</translation>
+    </message>
+    <message>
+        <source>PDF Rendering</source>
+        <translation>Rendu PDF</translation>
+    </message>
+    <message>
+        <source>Enable quality loss to increase zoom performances</source>
+        <translation type="vanished">Activer la perte de qualité pour améliorer les performaces de zoom</translation>
+    </message>
+    <message>
+        <source>Improve zoom execution time (can slightly affect rendering quality)</source>
+        <translation>Améliorer la vitesse d&apos;exécution du zoom (peut légèrement affecter la qualité du rendu)</translation>
     </message>
 </context>
 <context>

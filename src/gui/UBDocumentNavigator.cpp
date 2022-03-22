@@ -39,6 +39,7 @@
 #include "core/UBApplication.h"
 #include "UBDocumentNavigator.h"
 #include "board/UBBoardController.h"
+#include "board/UBBoardView.h"
 #include "adaptors/UBThumbnailAdaptor.h"
 #include "adaptors/UBSvgSubsetAdaptor.h"
 #include "document/UBDocumentController.h"
@@ -59,6 +60,7 @@ UBDocumentNavigator::UBDocumentNavigator(QWidget *parent, const char *name):QGra
   , mThumbnailWidth(0)
   , mThumbnailMinWidth(100)
   , mSelectedThumbnail(NULL)
+  , mLastClickedThumbnail(NULL)
   , mDropSource(NULL)
   , mDropTarget(NULL)
   , mDropBar(new QGraphicsRectItem())
@@ -86,7 +88,7 @@ UBDocumentNavigator::UBDocumentNavigator(QWidget *parent, const char *name):QGra
 
     connect(&mLongPressTimer, SIGNAL(timeout()), this, SLOT(longPressTimeout()), Qt::UniqueConnection);
 
-    connect(this, SIGNAL(mousePressAndHoldEventRequired(QPoint)), this, SLOT(mousePressAndHoldEvent(QPoint)), Qt::UniqueConnection);
+    connect(this, SIGNAL(mousePressAndHoldEventRequired()), this, SLOT(mousePressAndHoldEvent()), Qt::UniqueConnection);
 }
 
 /**
@@ -108,6 +110,12 @@ void UBDocumentNavigator::generateThumbnails(UBDocumentContainer* source)
 {
     mThumbsWithLabels.clear();
     int selectedIndex = -1;
+    int lastClickedIndex = -1;
+    if (mLastClickedThumbnail)
+    {
+        lastClickedIndex = mLastClickedThumbnail->sceneIndex();
+    }
+
     QList<QGraphicsItem*> graphicsItemList = mScene->items();
     for(int i = 0; i < graphicsItemList.size(); i+=1)
     {
@@ -143,6 +151,9 @@ void UBDocumentNavigator::generateThumbnails(UBDocumentContainer* source)
         thumbWithText.setBorder(border());
         mThumbsWithLabels.append(thumbWithText);
 
+        if (lastClickedIndex == i)
+            mLastClickedThumbnail = pixmapItem;
+
         mScene->addItem(pixmapItem);
         mScene->addItem(labelItem);
     }
@@ -173,7 +184,7 @@ void UBDocumentNavigator::onScrollToSelectedPage(int index)
         c++;
     }
     if(NULL != mSelectedThumbnail)
-        centerOn(mSelectedThumbnail);
+        ensureVisible(mSelectedThumbnail);
 }
 
 /**
@@ -192,6 +203,8 @@ void UBDocumentNavigator::updateSpecificThumbnail(int iPage)
         mScene->removeItem(oldItem);
         mScene->addItem(newItem);
         mThumbsWithLabels[iPage].setThumbnail(newItem);
+        if (mLastClickedThumbnail == oldItem)
+            mLastClickedThumbnail = newItem;
         delete oldItem;
         oldItem = NULL;
     }
@@ -273,7 +286,7 @@ void UBDocumentNavigator::resizeEvent(QResizeEvent *event)
     mThumbnailWidth = (width() > mThumbnailMinWidth) ? width() - 2*border() : mThumbnailMinWidth;
 
     if(mSelectedThumbnail)
-        centerOn(mSelectedThumbnail);
+        ensureVisible(mSelectedThumbnail);
 
     // Refresh the scene
     refreshScene();
@@ -285,74 +298,192 @@ void UBDocumentNavigator::resizeEvent(QResizeEvent *event)
  */
 void UBDocumentNavigator::mousePressEvent(QMouseEvent *event)
 {
-    mLongPressTimer.start();
-    mLastPressedMousePos = event->pos();
+    QGraphicsView::mousePressEvent(event);
 
-    QGraphicsItem* pClickedItem = itemAt(event->pos());
-    if(NULL != pClickedItem)
+    if (!event->isAccepted())
     {
+        mLongPressTimer.start();
+        mLastPressedMousePos = event->pos();
 
-        // First, select the clicked item
-        UBSceneThumbnailNavigPixmap* pCrntItem = dynamic_cast<UBSceneThumbnailNavigPixmap*>(pClickedItem);
+        mLastClickedThumbnail = clickedThumbnail(mLastPressedMousePos);
 
-        if(NULL == pCrntItem)
+        if(mLastClickedThumbnail)
+        {
+            UBApplication::boardController->persistViewPositionOnCurrentScene();
+            UBApplication::boardController->persistCurrentScene();
+            UBApplication::boardController->setActiveDocumentScene(mLastClickedThumbnail->sceneIndex());
+            UBApplication::boardController->centerOn(UBApplication::boardController->activeScene()->lastCenter());
+        }
+    }
+}
+
+UBSceneThumbnailNavigPixmap* UBDocumentNavigator::clickedThumbnail(const QPoint pos) const
+{
+    UBSceneThumbnailNavigPixmap* clickedThumbnail = NULL;
+
+    QGraphicsItem* clickedItem = itemAt(pos);
+
+    if(clickedItem)
+    {
+        clickedThumbnail = dynamic_cast<UBSceneThumbnailNavigPixmap*>(clickedItem);
+
+        if(!clickedThumbnail)
         {
             // If we fall here we may have clicked on the label instead of the thumbnail
-            UBThumbnailTextItem* pTextItem = dynamic_cast<UBThumbnailTextItem*>(pClickedItem);
-            if(NULL != pTextItem)
+            UBThumbnailTextItem* clickedTextItem = dynamic_cast<UBThumbnailTextItem*>(clickedItem);
+            if(clickedTextItem)
             {
                 for(int i = 0; i < mThumbsWithLabels.size(); i++)
                 {
                     const UBImgTextThumbnailElement& el = mThumbsWithLabels.at(i);
-                    if(el.getCaption() == pTextItem)
+                    if(el.getCaption() == clickedTextItem)
                     {
-                        pCrntItem = el.getThumbnail();
+                        clickedThumbnail = el.getThumbnail();
                         break;
                     }
                 }
             }
         }
-
-        int index = 0;
-        for(int i = 0; i < mThumbsWithLabels.size(); i++)
-        {
-            if (mThumbsWithLabels.at(i).getThumbnail() == pCrntItem)
-            {
-                mSelectedThumbnail = pCrntItem;
-                index = i;
-                break;
-            }
-        }
-        UBApplication::boardController->persistViewPositionOnCurrentScene();
-        UBApplication::boardController->persistCurrentScene();
-        UBApplication::boardController->setActiveDocumentScene(index);
-        UBApplication::boardController->centerOn(UBApplication::boardController->activeScene()->lastCenter());
     }
-    QGraphicsView::mousePressEvent(event);
+
+    return clickedThumbnail;
 }
 
 void UBDocumentNavigator::mouseReleaseEvent(QMouseEvent *event)
 {
     event->accept();
+    mLongPressTimer.stop();
 }
+
+
+void UBDocumentNavigator::keyPressEvent(QKeyEvent *event)
+{
+    UBBoardController* controller = UBApplication::boardController;
+    // send to the scene anyway
+    QApplication::sendEvent (scene (), event);
+
+    if (!event->isAccepted ())
+    {
+        switch (event->key ())
+        {
+        case Qt::Key_Up:
+        case Qt::Key_PageUp:
+        case Qt::Key_Left:
+        {
+            controller->previousScene ();
+            break;
+        }
+
+        case Qt::Key_Down:
+        case Qt::Key_PageDown:
+        case Qt::Key_Right:
+        case Qt::Key_Space:
+        {
+            controller->nextScene ();
+            break;
+        }
+
+        case Qt::Key_Home:
+        {
+            controller->firstScene ();
+            break;
+        }
+        case Qt::Key_End:
+        {
+            controller->lastScene ();
+            break;
+        }
+        case Qt::Key_Insert:
+        {
+            controller->addScene ();
+            break;
+        }
+        case Qt::Key_Control:
+        case Qt::Key_Shift:
+        {
+            controller->controlView()->setMultiselection(true);
+        }break;
+        }
+
+
+        if (event->modifiers () & Qt::ControlModifier) // keep only ctrl/cmd keys
+        {
+            switch (event->key ())
+            {
+            case Qt::Key_Plus:
+            case Qt::Key_I:
+            {
+                controller->zoomIn ();
+                event->accept ();
+                break;
+            }
+            case Qt::Key_Minus:
+            case Qt::Key_O:
+            {
+                controller->zoomOut ();
+                event->accept ();
+                break;
+            }
+            case Qt::Key_0:
+            {
+                controller->zoomRestore ();
+                event->accept ();
+                break;
+            }
+            case Qt::Key_Left:
+            {
+                controller->handScroll (-100, 0);
+                event->accept ();
+                break;
+            }
+            case Qt::Key_Right:
+            {
+                controller->handScroll (100, 0);
+                event->accept ();
+                break;
+            }
+            case Qt::Key_Up:
+            {
+                controller->handScroll (0, -100);
+                event->accept ();
+                break;
+            }
+            case Qt::Key_Down:
+            {
+                controller->handScroll (0, 100);
+                event->accept ();
+                break;
+            }
+            default:
+            {
+                // NOOP
+            }
+            }
+        }
+    }
+
+    // if ctrl of shift was pressed combined with other keys - we need to disable multiple selection.
+    if (event->isAccepted())
+        controller->controlView()->setMultiselection(false);
+}
+
 
 void UBDocumentNavigator::longPressTimeout()
 {
     if (QApplication::mouseButtons() != Qt::NoButton)
-        emit mousePressAndHoldEventRequired(mLastPressedMousePos);
+        emit mousePressAndHoldEventRequired();
 
     mLongPressTimer.stop();
 }
 
-void UBDocumentNavigator::mousePressAndHoldEvent(QPoint pos)
+void UBDocumentNavigator::mousePressAndHoldEvent()
 {
-    UBSceneThumbnailNavigPixmap* item = dynamic_cast<UBSceneThumbnailNavigPixmap*>(itemAt(pos));
-    if (item)
+    if (mLastClickedThumbnail)
     {
-        mDropSource = item;
-        mDropTarget = item;
+        mDropSource = mLastClickedThumbnail;
+        mDropTarget = mLastClickedThumbnail;
 
-        QPixmap pixmap = item->pixmap().scaledToWidth(mThumbnailWidth/2);
+        QPixmap pixmap = mLastClickedThumbnail->pixmap().scaledToWidth(mThumbnailWidth/2);
 
         QDrag *drag = new QDrag(this);
         drag->setMimeData(new QMimeData());
@@ -401,29 +532,31 @@ void UBDocumentNavigator::dragMoveEvent(QDragMoveEvent *event)
                            item->pos().y() + item->boundingRect().height() * scale / 2);
 
         bool dropAbove = mapToScene(position.toPoint()).y() < itemCenter.y();
-        bool movingUp = mDropSource->sceneIndex() > item->sceneIndex();
-        qreal y = 0;
+        if (mDropSource)
+        {
+            bool movingUp = mDropSource->sceneIndex() > item->sceneIndex();
+            qreal y = 0;
 
-        if (movingUp)
-        {
-            if (dropAbove)
+            if (movingUp)
             {
-                y = item->pos().y() - UBSettings::thumbnailSpacing / 2;
-                if (mDropBar->y() != y)
-                    mDropBar->setRect(QRectF(item->pos().x(), y, mThumbnailWidth-verticalScrollBar()->width(), 3));
+                if (dropAbove)
+                {
+                    y = item->pos().y() - UBSettings::thumbnailSpacing / 2;
+                    if (mDropBar->y() != y)
+                        mDropBar->setRect(QRectF(item->pos().x(), y, mThumbnailWidth-verticalScrollBar()->width(), 3));
+                }
             }
-        }
-        else
-        {
-            if (!dropAbove)
+            else
             {
-                y = item->pos().y() + item->boundingRect().height() * scale + UBSettings::thumbnailSpacing / 2;
-                if (mDropBar->y() != y)
-                    mDropBar->setRect(QRectF(item->pos().x(), y, mThumbnailWidth-verticalScrollBar()->width(), 3));
+                if (!dropAbove)
+                {
+                    y = item->pos().y() + item->boundingRect().height() * scale + UBSettings::thumbnailSpacing / 2;
+                    if (mDropBar->y() != y)
+                        mDropBar->setRect(QRectF(item->pos().x(), y, mThumbnailWidth-verticalScrollBar()->width(), 3));
+                }
             }
         }
     }
-
     event->acceptProposedAction();
 }
 
@@ -431,11 +564,15 @@ void UBDocumentNavigator::dropEvent(QDropEvent *event)
 {
     Q_UNUSED(event);
 
-    if (mDropSource->sceneIndex() != mDropTarget->sceneIndex())
-        UBApplication::boardController->moveSceneToIndex(mDropSource->sceneIndex(), mDropTarget->sceneIndex());
+    if (mDropSource && mDropTarget)
+    {
+        if (mDropSource->sceneIndex() != mDropTarget->sceneIndex())
+            UBApplication::boardController->moveSceneToIndex(mDropSource->sceneIndex(), mDropTarget->sceneIndex());
+    }
 
     mDropSource = NULL;
     mDropTarget = NULL;
+    mLastClickedThumbnail = NULL;
 
     mDropBar->setRect(QRectF());
     mDropBar->hide();

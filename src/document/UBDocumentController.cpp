@@ -120,8 +120,6 @@ UBDocumentReplaceDialog::UBDocumentReplaceDialog(const QString &pIncommingName, 
     mLineEdit->setText(pIncommingName);
     mLineEdit->selectedText();
 
-    mValidator = new QRegExpValidator(QRegExp("[^\\/\\:\\?\\*\\|\\<\\>\\\"]{1,}"), this);
-//    mLineEdit->setValidator(mValidator);
     labelLayout->addWidget(mLabelText);
     labelLayout->addWidget(mLineEdit);
 
@@ -347,6 +345,7 @@ UBDocumentTreeNode *UBDocumentTreeNode::previousSibling()
 UBDocumentTreeModel::UBDocumentTreeModel(QObject *parent) :
     QAbstractItemModel(parent)
   , mRootNode(0)
+  , mCurrentNode(nullptr)
 {
     UBDocumentTreeNode *rootNode = new UBDocumentTreeNode(UBDocumentTreeNode::Catalog, "root");
 
@@ -541,7 +540,14 @@ bool UBDocumentTreeModel::setData(const QModelIndex &index, const QVariant &valu
         if (!index.isValid() || value.toString().isEmpty()) {
             return false;
         }
-        setNewName(index, value.toString());
+
+        QString fullNewName = value.toString();
+        if (isCatalog(index))
+        {
+            fullNewName.replace('/', '-');
+        }
+
+        setNewName(index, fullNewName);
         return true;
     }
     return QAbstractItemModel::setData(index, value, role);
@@ -656,7 +662,14 @@ QMimeData *UBDocumentTreeModel::mimeData (const QModelIndexList &indexes) const
         }
     }
 
+#if defined(Q_OS_OSX)
+    #if (QT_VERSION < QT_VERSION_CHECK(5, 15, 0))
+        if (QOperatingSystemVersion::current().minorVersion() < 15) /* < Mojave */
+            mimeData->setUrls(urlList);
+    #endif
+#else
     mimeData->setUrls(urlList);
+#endif
     mimeData->setIndexes(indexList);
 
     return mimeData;
@@ -762,6 +775,31 @@ bool UBDocumentTreeModel::removeRows(int row, int count, const QModelIndex &pare
 
     endRemoveRows();
     return true;
+}
+
+bool UBDocumentTreeModel::containsDocuments(const QModelIndex &index)
+{
+    for (int i = 0; i < rowCount(index); i++)
+    {
+        QModelIndex child = this->index(i, 0, index);
+        if (isCatalog(child))
+        {
+            if (containsDocuments(child))
+            {
+                return true;
+            }
+        }
+        else if (isDocument(child))
+        {
+           return true;
+        }
+        else
+        {
+            qDebug() << "Who the hell are you ?";
+        }
+    }
+
+    return false;
 }
 
 QModelIndex UBDocumentTreeModel::indexForNode(UBDocumentTreeNode *pNode) const
@@ -919,7 +957,6 @@ void UBDocumentTreeModel::moveIndexes(const QModelIndexList &source, const QMode
             fixNodeName(s, destinationParent);
             sourceNode->parentNode()->moveChild(sourceNode, destIndex, newParentNode);
             updateIndexNameBindings(sourceNode);
-
             hasOneInsertion = true;
         }
     }
@@ -997,7 +1034,7 @@ QString UBDocumentTreeModel::virtualPathForIndex(const QModelIndex &pIndex) cons
     return virtualDirForIndex(pIndex) + "/" + curNode->nodeName();
 }
 
-QStringList UBDocumentTreeModel::nodeNameList(const QModelIndex &pIndex) const
+QStringList UBDocumentTreeModel::nodeNameList(const QModelIndex &pIndex, bool distinctNodeType) const
 {
     QStringList result;
 
@@ -1006,8 +1043,23 @@ QStringList UBDocumentTreeModel::nodeNameList(const QModelIndex &pIndex) const
         return QStringList();
     }
 
-    foreach (UBDocumentTreeNode *curNode, catalog->children()) {
-        result << curNode->nodeName();
+    foreach (UBDocumentTreeNode *curNode, catalog->children())
+    {
+        if (distinctNodeType)
+        {
+            if (curNode->nodeType() == UBDocumentTreeNode::Catalog)
+            {
+                result << "folder - " + curNode->nodeName();
+            }
+            else
+            {
+                result << curNode->nodeName();
+            }
+        }
+        else
+        {
+            result << curNode->nodeName();
+        }
     }
 
     return result;
@@ -1048,9 +1100,12 @@ QModelIndex UBDocumentTreeModel::goTo(const QString &dir)
         QString curLevelName = pathList.takeFirst();
         if (searchingNode) {
             searchingNode = false;
-            for (int i = 0; i < rowCount(parentIndex); ++i) {
+            int irowCount = rowCount(parentIndex);
+            for (int i = 0; i < irowCount; ++i) {
                 QModelIndex curChildIndex = index(i, 0, parentIndex);
-                if (nodeFromIndex(curChildIndex)->nodeName() == curLevelName) {
+                UBDocumentTreeNode* currentNode = nodeFromIndex(curChildIndex);
+                if (currentNode->nodeName() == curLevelName && currentNode->nodeType() == UBDocumentTreeNode::Catalog)
+                {
                     searchingNode = true;
                     parentIndex = curChildIndex;
                     break;
@@ -1136,7 +1191,7 @@ void UBDocumentTreeModel::setNewName(const QModelIndex &index, const QString &ne
     if (isCatalog(index)) {
         QString fullNewName = newName;
         if (!newName.contains(magicSeparator)) {
-            indexNode->setNodeName(newName);
+            indexNode->setNodeName(fullNewName);
             QString virtualDir = virtualDirForIndex(index);
             fullNewName.prepend(virtualDir.isEmpty() ? "" : virtualDir + magicSeparator);
         }
@@ -1200,6 +1255,7 @@ void UBDocumentTreeModel::updateIndexNameBindings(UBDocumentTreeNode *nd)
     } else if (nd->proxyData()) {
         nd->proxyData()->setMetaData(UBSettings::documentGroupName, virtualPathForIndex(indexForNode(nd->parentNode())));
         nd->proxyData()->setMetaData(UBSettings::documentName, nd->nodeName());
+        nd->proxyData()->setMetaData(UBSettings::documentUpdatedAt, UBStringUtils::toUtcIsoDateTime(QDateTime::currentDateTime()));
         UBPersistenceManager::persistenceManager()->persistDocumentMetadata(nd->proxyData());
     }
 }
@@ -1433,6 +1489,7 @@ void UBDocumentTreeView::dropEvent(QDropEvent *event)
             return;
         }
 
+        int count = 0;
         int total = ubMime->items().size();
         QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
 
@@ -1440,16 +1497,60 @@ void UBDocumentTreeView::dropEvent(QDropEvent *event)
         {
             UBDocumentProxy *fromProxy = sourceItem.documentProxy();
             int fromIndex = sourceItem.sceneIndex();
-            int toIndex = targetDocProxy->pageCount();
+            int toIndex = targetDocProxy->pageCount();            
 
-            UBPersistenceManager::persistenceManager()->copyDocumentScene(fromProxy, fromIndex,
-                                                                          targetDocProxy, toIndex);
+            count++;
+
+            UBApplication::applicationController->showMessage(tr("Copying page %1/%2").arg(count).arg(total), true);
+
+            // TODO UB 4.x Move following code to some controller class
+            UBGraphicsScene *scene = UBPersistenceManager::persistenceManager()->loadDocumentScene(sourceItem.documentProxy(), sourceItem.sceneIndex());
+            if (scene)
+            {
+                UBGraphicsScene* sceneClone = scene->sceneDeepCopy();
+
+                UBDocumentProxy *targetDocProxy = docModel->proxyForIndex(targetIndex);
+
+                foreach (QUrl relativeFile, scene->relativeDependencies())
+                {
+                    QString source = scene->document()->persistencePath() + "/" + relativeFile.toString();
+                    QString target = targetDocProxy->persistencePath() + "/" + relativeFile.toString();
+
+                    QString sourceDecoded = scene->document()->persistencePath() + "/" + relativeFile.toString(QUrl::DecodeReserved);
+                    QString targetDecoded = targetDocProxy->persistencePath() + "/" + relativeFile.toString(QUrl::DecodeReserved);
+
+                    if(QFileInfo(source).isDir())
+                        UBFileSystemUtils::copyDir(source,target);
+                    else{
+                        QFileInfo fi(targetDecoded);
+                        QDir d = fi.dir();
+                        d.mkpath(d.absolutePath());
+                        QFile::copy(sourceDecoded, targetDecoded);
+                    }
+                }
+
+                UBPersistenceManager::persistenceManager()->insertDocumentSceneAt(targetDocProxy, sceneClone, targetDocProxy->pageCount());
+
+                QString thumbTmp(fromProxy->persistencePath() + UBFileSystemUtils::digitFileFormat("/page%1.thumbnail.jpg", fromIndex));
+                QString thumbTo(targetDocProxy->persistencePath() + UBFileSystemUtils::digitFileFormat("/page%1.thumbnail.jpg", toIndex));
+
+                QFile::remove(thumbTo);
+                QFile::copy(thumbTmp, thumbTo);
+
+                Q_ASSERT(QFileInfo(thumbTmp).exists());
+                Q_ASSERT(QFileInfo(thumbTo).exists());
+                const QPixmap *pix = new QPixmap(thumbTmp);
+                UBDocumentController *ctrl = UBApplication::documentController;
+                ctrl->addPixmapAt(pix, toIndex);
+                ctrl->TreeViewSelectionChanged(ctrl->firstSelectedTreeIndex(), QModelIndex());
+            }
+
+            QApplication::restoreOverrideCursor();
+            UBApplication::applicationController->showMessage(tr("%1 pages copied", "", total).arg(total), false);
+
+            docModel->setHighLighted(QModelIndex());
         }
 
-        QApplication::restoreOverrideCursor();
-        UBApplication::applicationController->showMessage(tr("%1 pages copied", "", total).arg(total), false);
-
-        docModel->setHighLighted(QModelIndex());
     }
     else
     {
@@ -1548,6 +1649,7 @@ void UBDocumentTreeItemDelegate::commitAndCloseEditor()
     if (lineEditor) {
         emit commitData(lineEditor);
         //emit closeEditor(lineEditor);
+        emit UBApplication::documentController->reorderDocumentsRequested();
     }
 }
 
@@ -1568,7 +1670,6 @@ void UBDocumentTreeItemDelegate::processChangedText(const QString &str) const
 bool UBDocumentTreeItemDelegate::validateString(const QString &str) const
 {
     return !mExistingFileNames.contains(str);
-
 }
 
 QWidget *UBDocumentTreeItemDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
@@ -1637,6 +1738,7 @@ UBDocumentController::UBDocumentController(UBMainWindow* mainWindow)
     setupToolbar();
     connect(this, SIGNAL(exportDone()), mMainWindow, SLOT(onExportDone()));
     connect(this, SIGNAL(documentThumbnailsUpdated(UBDocumentContainer*)), this, SLOT(refreshDocumentThumbnailsView(UBDocumentContainer*)));
+    connect(this, SIGNAL(reorderDocumentsRequested()), this, SLOT(reorderDocuments()));
 }
 
 UBDocumentController::~UBDocumentController()
@@ -1944,9 +2046,7 @@ void UBDocumentController::setupViews()
 
         // sort documents according to preferences
         int sortKind  = UBSettings::settings()->documentSortKind->get().toInt();
-        int sortOrder = UBSettings::settings()->documentSortOrder->get().toInt();        
-
-        sortDocuments(sortKind, sortOrder);
+        int sortOrder = UBSettings::settings()->documentSortOrder->get().toInt();
 
         // update icon and button
         mDocumentUI->sortKind->setCurrentIndex(sortKind);
@@ -1974,6 +2074,8 @@ void UBDocumentController::setupViews()
 
         //mDocumentUI->documentTreeView->hideColumn(1);
         mDocumentUI->documentTreeView->hideColumn(2);
+
+        sortDocuments(sortKind, sortOrder);
 
         connect(mDocumentUI->sortKind, SIGNAL(activated(int)), this, SLOT(onSortKindChanged(int)));
         connect(mDocumentUI->sortOrder, SIGNAL(toggled(bool)), this, SLOT(onSortOrderChanged(bool)));
@@ -2009,7 +2111,31 @@ void UBDocumentController::setupViews()
     }
 }
 
-//N/C - NNE - 20140403
+void UBDocumentController::refreshDateColumns()
+{
+    if (UBSettings::settings()->documentSortKind->get().toInt() == UBDocumentController::Alphabetical)
+    {
+        if (!UBSettings::settings()->showDateColumnOnAlphabeticalSort->get().toBool())
+        {
+            mDocumentUI->documentTreeView->hideColumn(1);
+            mDocumentUI->documentTreeView->hideColumn(2);
+        }
+        else
+        {
+            mDocumentUI->documentTreeView->showColumn(1);
+            mDocumentUI->documentTreeView->hideColumn(2);
+        }
+    }
+}
+
+void UBDocumentController::reorderDocuments()
+{
+   int kindIndex = mDocumentUI->sortKind->currentIndex();
+   int orderIndex = mDocumentUI->sortOrder->isChecked() ? UBDocumentController::DESC : UBDocumentController::ASC;
+
+   sortDocuments(kindIndex, orderIndex);
+}
+
 void UBDocumentController::sortDocuments(int kind, int order)
 {
     Qt::SortOrder sortOrder = Qt::AscendingOrder;
@@ -2029,6 +2155,11 @@ void UBDocumentController::sortDocuments(int kind, int order)
     }else{
         mSortFilterProxyModel->setSortRole(Qt::DisplayRole);
         mSortFilterProxyModel->sort(0, sortOrder);
+        if (!UBSettings::settings()->showDateColumnOnAlphabeticalSort->get().toBool())
+        {
+            mDocumentUI->documentTreeView->hideColumn(1);
+            mDocumentUI->documentTreeView->hideColumn(2);
+        }
     }
 }
 
@@ -2193,6 +2324,8 @@ void UBDocumentController::duplicateSelectedItem()
 
         showMessage(tr("Document %1 copied").arg(""), false);
     }
+
+    emit reorderDocumentsRequested();
 }
 
 void UBDocumentController::deleteSelectedItem()
@@ -2425,23 +2558,36 @@ QModelIndex UBDocumentController::findPreviousSiblingNotSelected(const QModelInd
 {
     QModelIndex sibling = index.sibling(index.row() - 1, 0);
 
-    if(sibling.isValid()){
-        //if sibling is not selected and it is a document
-        //else keep searching
+    if(sibling.isValid())
+    {
         if(!parentIsSelected(sibling, selectionModel)
-                && !selectionModel->isSelected(sibling)
-                && !sibling.model()->hasChildren(sibling)){
-            return sibling;
-        }else{
+                && !selectionModel->isSelected(sibling))
+        {
+            QModelIndex model = mSortFilterProxyModel->mapToSource(sibling);
+
+            if(UBPersistenceManager::persistenceManager()->mDocumentTreeStructureModel->isCatalog(model))
+            {
+                return findPreviousSiblingNotSelected(sibling, selectionModel);
+            }
+            else
+            {
+                return sibling;
+            }
+        }
+        else
+        {
             return findPreviousSiblingNotSelected(sibling, selectionModel);
         }
     }else{
         //if the parent exist keep searching, else stop the search
         QModelIndex parent = index.model()->parent(index);
 
-        if(parent.isValid()){
+        if(parent.isValid())
+        {
             return findPreviousSiblingNotSelected(parent, selectionModel);
-        }else{
+        }
+        else
+        {
             return QModelIndex();
         }
     }
@@ -2451,29 +2597,38 @@ QModelIndex UBDocumentController::findNextSiblingNotSelected(const QModelIndex &
 {
     QModelIndex sibling = index.sibling(index.row() + 1, 0);
 
-    if(sibling.isValid()){
-        //if sibling is not selected and it is a document and its parent are not selected
-        //else keep searching
+    if(sibling.isValid())
+    {
         if(!parentIsSelected(sibling, selectionModel)
-                && !selectionModel->isSelected(sibling)
-                && !sibling.model()->hasChildren(sibling)){
-            QModelIndex model = mSortFilterProxyModel->mapToSource(index);
+            && !selectionModel->isSelected(sibling))
+        {
+            QModelIndex model = mSortFilterProxyModel->mapToSource(sibling);
 
-            if(UBPersistenceManager::persistenceManager()->mDocumentTreeStructureModel->isCatalog(model)){
-                return QModelIndex();
-            }else{
+            if(UBPersistenceManager::persistenceManager()->mDocumentTreeStructureModel->isCatalog(model))
+            {
+                return findNextSiblingNotSelected(sibling, selectionModel);
+            }
+            else
+            {
                 return sibling;
             }
-        }else{
+        }
+        else
+        {
             return findNextSiblingNotSelected(sibling, selectionModel);
         }
-    }else{
+    }
+    else
+    {
         //if the parent exist keep searching, else stop the search
         QModelIndex parent = index.parent();
 
-        if(parent.isValid()){
+        if(parent.isValid())
+        {
             return findNextSiblingNotSelected(parent, selectionModel);
-        }else{
+        }
+        else
+        {
             return QModelIndex();
         }
     }
@@ -2502,6 +2657,69 @@ void UBDocumentController::moveToTrash(QModelIndex &index, UBDocumentTreeModel* 
     moveIndexesToTrash(list, docModel);
 }
 //issue 1629 - NNE - 20131212 : END
+
+void UBDocumentController::deleteDocumentsInFolderOlderThan(const QModelIndex &index, const int days)
+{
+    UBDocumentTreeModel *docModel = UBPersistenceManager::persistenceManager()->mDocumentTreeStructureModel;
+
+    QModelIndexList list;
+    for (int i = 0; i < docModel->rowCount(index); i++)
+    {
+        list << docModel->index(i, 0, index);
+    }
+
+    foreach (QModelIndex child, list)
+    {
+        UBDocumentProxy *documentProxy= docModel->proxyForIndex(child);
+
+        if (documentProxy)
+        {
+            if (documentProxy->lastUpdate().date() < QDateTime::currentDateTime().addDays(-days).date())
+            {
+                UBPersistenceManager::persistenceManager()->deleteDocument(documentProxy);
+            }
+        }
+        else
+        {
+            if (docModel->isCatalog(child))
+            {
+                deleteDocumentsInFolderOlderThan(child, days);
+            }
+        }
+    }
+}
+
+void UBDocumentController::deleteEmptyFolders(const QModelIndex &index)
+{
+    UBDocumentTreeModel *docModel = UBPersistenceManager::persistenceManager()->mDocumentTreeStructureModel;
+
+    QModelIndexList list;
+    for (int i = 0; i < docModel->rowCount(index); i++)
+    {
+        list << docModel->index(i, 0, index);
+    }
+
+    if (list.length() > 0)
+    {
+        foreach (QModelIndex child, list)
+        {
+            if (docModel->isCatalog(child))
+            {
+                if (!docModel->containsDocuments(child))
+                {
+                    deleteIndexAndAssociatedData(child);
+                }
+            }
+        }
+    }
+    else
+    {
+        if (docModel->isCatalog(index))
+        {
+            deleteIndexAndAssociatedData(index);
+        }
+    }
+}
 
 void UBDocumentController::emptyFolder(const QModelIndex &index, DeletionType pDeletionType)
 {
@@ -2599,6 +2817,8 @@ void UBDocumentController::importFile()
 
     if (fileInfo.suffix().toLower() == "ubx") {
         UBPersistenceManager::persistenceManager()->createDocumentProxiesStructure(docManager->importUbx(filePath, UBSettings::userDocumentDirectory()), true);
+
+        emit documentThumbnailsUpdated(this); // some documents might have been overwritten while not having the same page count
 
     } else {
         UBSettings::settings()->lastImportFilePath->set(QVariant(fileInfo.absolutePath()));

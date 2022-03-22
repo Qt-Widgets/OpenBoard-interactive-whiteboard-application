@@ -50,6 +50,7 @@ int UBSettings::crossSize = 24;
 int UBSettings::defaultCrossSize = 24;
 int UBSettings::minCrossSize = 12;
 int UBSettings::maxCrossSize = 96; //TODO: user-settable?
+bool UBSettings::intermediateLines = false;
 int UBSettings::colorPaletteSize = 5;
 int UBSettings::objectFrameWidth = 20;
 int UBSettings::boardMargin = 10;
@@ -60,6 +61,7 @@ QString UBSettings::documentSize = QString("Size");
 QString UBSettings::documentIdentifer = QString("ID");
 QString UBSettings::documentVersion = QString("Version");
 QString UBSettings::documentUpdatedAt = QString("UpdatedAt");
+QString UBSettings::documentPageCount = QString("PageCount");
 QString UBSettings::documentDate = QString("date");
 
 QString UBSettings::trashedDocumentGroupNamePrefix = QString("_Trash:");
@@ -75,19 +77,19 @@ const char *UBSettings::sDefaultFontFamily = "Arial";
 QString UBSettings::currentFileVersion = "4.8.0";
 
 QBrush UBSettings::eraserBrushDarkBackground = QBrush(QColor(127, 127, 127, 80));
-QBrush UBSettings::eraserBrushLightBackground = QBrush(QColor(255, 255, 255, 30));
+QBrush UBSettings::eraserBrushLightBackground = QBrush(QColor(127, 127, 127, 80));
 
 QPen UBSettings::eraserPenDarkBackground = QPen(QColor(255, 255, 255, 127));
 QPen UBSettings::eraserPenLightBackground = QPen(QColor(0, 0, 0, 127));
 
 QColor UBSettings::markerCircleBrushColorDarkBackground = QColor(127, 127, 127, 80);
-QColor UBSettings::markerCircleBrushColorLightBackground = QColor(255, 255, 255, 30);
+QColor UBSettings::markerCircleBrushColorLightBackground = QColor(127, 127, 127, 80);
 
 QColor UBSettings::markerCirclePenColorDarkBackground = QColor(255, 255, 255, 127);
 QColor UBSettings::markerCirclePenColorLightBackground = QColor(0, 0, 0, 127);
 
 QColor UBSettings::penCircleBrushColorDarkBackground = QColor(127, 127, 127, 80);
-QColor UBSettings::penCircleBrushColorLightBackground = QColor(255, 255, 255, 30);
+QColor UBSettings::penCircleBrushColorLightBackground = QColor(127, 127, 127, 80);
 
 QColor UBSettings::penCirclePenColorDarkBackground = QColor(255, 255, 255, 127);
 QColor UBSettings::penCirclePenColorLightBackground = QColor(0, 0, 0, 127);
@@ -408,6 +410,9 @@ void UBSettings::init()
     pdfPageFormat = new UBSetting(this, "PDF", "PageFormat", "A4");
     pdfResolution = new UBSetting(this, "PDF", "Resolution", "300");
 
+    pdfZoomBehavior = new UBSetting(this, "PDF", "ZoomBehavior", "4");
+    enableQualityLossToIncreaseZoomPerfs = new UBSetting(this, "PDF", "enableQualityLossToIncreaseZoomPerfs", true);
+
     podcastFramesPerSecond = new UBSetting(this, "Podcast", "FramesPerSecond", 10);
     podcastVideoSize = new UBSetting(this, "Podcast", "VideoSize", "Medium");
     podcastAudioRecordingDevice = new UBSetting(this, "Podcast", "AudioRecordingDevice", "Default");
@@ -422,6 +427,15 @@ void UBSettings::init()
     communityUser = new UBSetting(this, "Community", "Username", "");
     communityPsw = new UBSetting(this, "Community", "Password", "");
     communityCredentialsPersistence = new UBSetting(this,"Community", "CredentialsPersistence",false);
+
+    enableToolAxes = new UBSetting(this, "Board", "EnableToolAxes", false);
+    enableIntermediateLines = new UBSetting(this, "Board", "EnableIntermediateLines", false);
+
+    if (enableToolAxes->get().toBool())
+    {
+        // add axes tool id to list
+        UBToolsManager::manager()->addTool(UBToolsManager::manager()->axes);
+    }
 
     QStringList uris = UBToolsManager::manager()->allToolIDs();
 
@@ -457,6 +471,12 @@ void UBSettings::init()
     libIconSize = new UBSetting(this, "Library", "LibIconSize", defaultLibraryIconSize);
 
     useSystemOnScreenKeyboard = new UBSetting(this, "App", "UseSystemOnScreenKeyboard", true);
+
+    showDateColumnOnAlphabeticalSort = new UBSetting(this, "Document", "ShowDateColumnOnAlphabeticalSort", false);
+    emptyTrashForOlderDocuments = new UBSetting(this, "Document", "emptyTrashForOlderDocuments", false);
+    emptyTrashDaysValue = new UBSetting(this, "Document", "emptyTrashDaysValue", 30);
+
+    pointerDiameter = value("Board/PointerDiameter", pointerDiameter).toInt();
 
     cleanNonPersistentSettings();
     checkNewSettings();

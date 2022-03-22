@@ -187,6 +187,8 @@ public:
     bool dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent);
     bool removeRows(int row, int count, const QModelIndex &parent);
 
+    bool containsDocuments(const QModelIndex& index);
+
     QModelIndex indexForNode(UBDocumentTreeNode *pNode) const;
     QPersistentModelIndex persistentIndexForNode(UBDocumentTreeNode *pNode);
 //    bool insertRow(int row, const QModelIndex &parent);
@@ -207,7 +209,7 @@ public:
     UBDocumentProxy *proxyForIndex(const QModelIndex &pIndex) const;
     QString virtualDirForIndex(const QModelIndex &pIndex) const;
     QString virtualPathForIndex(const QModelIndex &pIndex) const;
-    QStringList nodeNameList(const QModelIndex &pIndex) const;
+    QStringList nodeNameList(const QModelIndex &pIndex, bool distinctNodeType = false) const;
     bool newNodeAllowed(const QModelIndex &pSelectedIndex)  const;
     QModelIndex goTo(const QString &dir);
     bool inTrash(const QModelIndex &index) const;
@@ -414,6 +416,9 @@ class UBDocumentController : public UBDocumentContainer
           */
         void moveToTrash(QModelIndex &index, UBDocumentTreeModel* docModel);
 
+        void deleteDocumentsInFolderOlderThan(const QModelIndex &index, const int days);
+        void deleteEmptyFolders(const QModelIndex &index);
+
         QModelIndex mapIndexToSource(const QModelIndex &index);
         QModelIndexList mapIndexesToSource(const QModelIndexList &indexes);
 
@@ -426,9 +431,12 @@ class UBDocumentController : public UBDocumentContainer
 
     signals:
         void exportDone();
+        void reorderDocumentsRequested();
 
     public slots:
         void createNewDocument();
+        void refreshDateColumns();
+        void reorderDocuments();
         //issue 1629 - NNE - 20131105
         void createNewDocumentInUntitledFolder();
 

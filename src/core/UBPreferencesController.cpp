@@ -39,6 +39,7 @@
 #include "core/UBDisplayManager.h"
 
 #include "board/UBBoardController.h"
+#include "document/UBDocumentController.h"
 #include "domain/UBGraphicsScene.h"
 #include "board/UBDrawingController.h"
 #include "podcast/UBPodcastController.h"
@@ -136,6 +137,17 @@ void UBPreferencesController::wire()
 
     connect(mPreferencesUI->useSystemOSKCheckBox, SIGNAL(clicked(bool)), settings->useSystemOnScreenKeyboard, SLOT(setBool(bool)));
     connect(mPreferencesUI->useSystemOSKCheckBox, SIGNAL(clicked(bool)), this, SLOT(systemOSKCheckBoxToggled(bool)));
+
+    //Zoom Behavior preferences
+    connect(mPreferencesUI->enableQualityLossToIncreaseZoomPerfs, SIGNAL(clicked(bool)), settings->enableQualityLossToIncreaseZoomPerfs, SLOT(setBool(bool)));
+    connect(mPreferencesUI->enableQualityLossToIncreaseZoomPerfs, SIGNAL(clicked(bool)), this, SLOT(setPdfZoomBehavior(bool)));
+
+    // Documents Mode preferences
+    connect(mPreferencesUI->showDateColumnOnAlphabeticalSort, SIGNAL(clicked(bool)), settings->showDateColumnOnAlphabeticalSort, SLOT(setBool(bool)));
+    connect(mPreferencesUI->showDateColumnOnAlphabeticalSort, SIGNAL(clicked(bool)), UBApplication::documentController, SLOT(refreshDateColumns()));
+    connect(mPreferencesUI->emptyTrashForOlderDocuments, SIGNAL(clicked(bool)), settings->emptyTrashForOlderDocuments, SLOT(setBool(bool)));
+    connect(mPreferencesUI->emptyTrashDaysValue, SIGNAL(valueChanged(int)), settings->emptyTrashDaysValue,  SLOT(setInt(int)));
+
 
     connect(mPreferencesUI->keyboardPaletteKeyButtonSize, SIGNAL(currentIndexChanged(const QString &)), settings->boardKeyboardPaletteKeyBtnSize, SLOT(setString(const QString &)));
     connect(mPreferencesUI->startModeComboBox, SIGNAL(currentIndexChanged(int)), settings->appStartMode, SLOT(setInt(int)));
@@ -274,6 +286,12 @@ void UBPreferencesController::init()
     mPreferencesUI->useSystemOSKCheckBox->setChecked(settings->useSystemOnScreenKeyboard->get().toBool());
     this->systemOSKCheckBoxToggled(mPreferencesUI->useSystemOSKCheckBox->isChecked());
 
+    mPreferencesUI->enableQualityLossToIncreaseZoomPerfs->setChecked(settings->enableQualityLossToIncreaseZoomPerfs->get().toBool());
+
+    mPreferencesUI->showDateColumnOnAlphabeticalSort->setChecked(settings->showDateColumnOnAlphabeticalSort->get().toBool());
+    mPreferencesUI->emptyTrashForOlderDocuments->setChecked(settings->emptyTrashForOlderDocuments->get().toBool());
+    mPreferencesUI->emptyTrashDaysValue->setValue(settings->emptyTrashDaysValue->get().toInt());
+
     mPreferencesUI->startModeComboBox->setCurrentIndex(settings->appStartMode->get().toInt());
 
     mPreferencesUI->useExternalBrowserCheckBox->setChecked(settings->webUseExternalBrowser->get().toBool());
@@ -338,6 +356,15 @@ void UBPreferencesController::defaultSettings()
         mPreferencesUI->startModeComboBox->setCurrentIndex(0);
 
         mPreferencesUI->useSystemOSKCheckBox->setChecked(settings->useSystemOnScreenKeyboard->reset().toBool());
+
+        mPreferencesUI->showDateColumnOnAlphabeticalSort->setChecked(settings->showDateColumnOnAlphabeticalSort->reset().toBool());
+        UBApplication::documentController->refreshDateColumns();
+
+        mPreferencesUI->enableQualityLossToIncreaseZoomPerfs->setChecked(settings->enableQualityLossToIncreaseZoomPerfs->reset().toBool());
+
+        mPreferencesUI->emptyTrashForOlderDocuments->setChecked(settings->emptyTrashForOlderDocuments->reset().toBool());
+        mPreferencesUI->emptyTrashDaysValue->setValue(settings->emptyTrashDaysValue->reset().toInt());
+
     }
     else if (mPreferencesUI->mainTabWidget->currentWidget() == mPreferencesUI->penTab)
     {
@@ -634,6 +661,18 @@ void UBPreferencesController::systemOSKCheckBoxToggled(bool checked)
 {
     mPreferencesUI->keyboardPaletteKeyButtonSize->setVisible(!checked);
     mPreferencesUI->keyboardPaletteKeyButtonSize_Label->setVisible(!checked);
+}
+
+void UBPreferencesController::setPdfZoomBehavior(bool checked)
+{
+    if (checked)
+    {
+        UBSettings::settings()->pdfZoomBehavior->setInt(4);// Multithreaded, several steps, downsampled.
+    }
+    else
+    {
+        UBSettings::settings()->pdfZoomBehavior->setInt(0);//Old behavior. To remove if no issues found with the other mode
+    }
 }
 
 UBBrushPropertiesFrame::UBBrushPropertiesFrame(QFrame* owner, const QList<QColor>& lightBackgroundColors,

@@ -222,7 +222,6 @@ void UBDisplayManager::adjustScreens(int screen)
 
 void UBDisplayManager::positionScreens()
 {
-
     if(mDesktopWidget && mControlScreenIndex > -1)
     {
         mDesktopWidget->hide();

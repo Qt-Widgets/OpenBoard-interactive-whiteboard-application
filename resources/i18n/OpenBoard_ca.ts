@@ -205,7 +205,7 @@
     </message>
     <message>
         <source>Smalle Eraser</source>
-        <translation>Esborrador petit</translation>
+        <translation type="vanished">Esborrador petit</translation>
     </message>
     <message>
         <source>Medium Eraser</source>
@@ -217,7 +217,7 @@
     </message>
     <message>
         <source>Color</source>
-        <translation>Color</translation>
+        <translation type="vanished">Color</translation>
     </message>
     <message>
         <source>Back</source>
@@ -811,6 +811,34 @@
         <source>Reset grid size</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Small Eraser</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color 1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color 2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color 3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color 4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color 5</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Draw intermediate grid lines</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>PasswordDialog</name>
@@ -909,6 +937,10 @@
         <source>Grid size</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Draw intermediate grid lines</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UBBoardController</name>
@@ -967,6 +999,10 @@
     <message>
         <source>Deleting page %1</source>
         <translation></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished">Color</translation>
     </message>
 </context>
 <context>
@@ -1180,7 +1216,7 @@
     </message>
     <message>
         <source>Are you sure you want to remove the selected item(s) ?</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">¿Está seguro de que desexa eliminar els elements seleccionats?</translation>
     </message>
     <message>
         <source>The document &apos;%1&apos; has been generated with a newer version of OpenBoard (%2). By opening it, you may lose some information. Do you want to proceed?</source>
@@ -1303,6 +1339,10 @@ Providing a new name will create a new document.</source>
     <message>
         <source>Are you sure you want to remove the selected item(s) ?</source>
         <translation>¿Está seguro de que desexa eliminar els elements seleccionats?</translation>
+    </message>
+    <message>
+        <source>Copying page %1/%2</source>
+        <translation type="unfinished">S&apos;està copiant la pàgina %1/%2</translation>
     </message>
 </context>
 <context>
@@ -1595,7 +1635,7 @@ Providing a new name will create a new document.</source>
     </message>
     <message>
         <source>Animations</source>
-        <translation>Animacions</translation>
+        <translation type="vanished">Animacions</translation>
     </message>
     <message>
         <source>Interactivities</source>
@@ -2124,6 +2164,10 @@ Voleu ignorar aquests errors per a aquest amfitrió?</translation>
         <source>Cache</source>
         <translation>Memòria cau</translation>
     </message>
+    <message>
+        <source>Axes</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>UBTrapFlashController</name>
@@ -2484,6 +2528,13 @@ Reinicieu l&apos;aplicació per accedir als documents actualitzats.</translation
     </message>
 </context>
 <context>
+    <name>XPDFRenderer</name>
+    <message>
+        <source>Processing...</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>YouTubePublishingDialog</name>
     <message>
         <source>Publish Podcast to YouTube</source>
@@ -2818,6 +2869,30 @@ p, li { white-space: pre-wrap; }
     </message>
     <message>
         <source>Check if Open-Sankoré data could be imported at launch</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Documents Mode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Display date column on alphabetical sort</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Empty trash for documents older than</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>days</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>PDF Rendering</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Improve zoom execution time (can slightly affect rendering quality)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

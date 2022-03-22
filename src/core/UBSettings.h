@@ -191,6 +191,7 @@ class UBSettings : public QObject
         static int defaultCrossSize;
         static int minCrossSize;
         static int maxCrossSize;
+        static bool intermediateLines;
 
         static int colorPaletteSize;
         static int objectFrameWidth;
@@ -201,6 +202,7 @@ class UBSettings : public QObject
         static QString documentIdentifer;
         static QString documentVersion;
         static QString documentUpdatedAt;
+        static QString documentPageCount;
 
         static QString documentDate;
 
@@ -359,6 +361,9 @@ class UBSettings : public QObject
         UBSetting* pdfPageFormat;
         UBSetting* pdfResolution;
 
+        UBSetting* pdfZoomBehavior;
+        UBSetting* enableQualityLossToIncreaseZoomPerfs;
+
         UBSetting* podcastFramesPerSecond;
         UBSetting* podcastVideoSize;
         UBSetting* podcastWindowsMediaBitsPerSecond;
@@ -413,8 +418,16 @@ class UBSettings : public QObject
 
         UBSetting* useSystemOnScreenKeyboard;
 
+        UBSetting* showDateColumnOnAlphabeticalSort;
+
+        UBSetting* emptyTrashForOlderDocuments;
+        UBSetting* emptyTrashDaysValue;
+
         UBSetting* magnifierDrawingMode;
         UBSetting* autoSaveInterval;
+
+        UBSetting* enableToolAxes;
+        UBSetting* enableIntermediateLines;
 
     public slots:
 

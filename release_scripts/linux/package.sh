@@ -85,13 +85,13 @@ initializeVariables()
 
   # Include Qt libraries and plugins in the package, or not
   # (this is necessary if the target system doesn't provide Qt 5.5.1)
-  BUNDLE_QT=false
+  BUNDLE_QT=true
 
   # Qt installation path. This may vary across machines
-  QT_PATH="/usr/lib/x86_64-linux-gnu/qt5"
+  QT_PATH="/home/dev/Qt/5.15.0/gcc_64"
   QT_PLUGINS_SOURCE_PATH="$QT_PATH/plugins"
   GUI_TRANSLATIONS_DIRECTORY_PATH="/usr/share/qt5/translations"
-  QT_LIBRARY_SOURCE_PATH="$QT_PATH/.."
+  QT_LIBRARY_SOURCE_PATH="$QT_PATH/lib"
 
   NOTIFY_CMD=`which notify-send`
   ZIP_PATH=`which zip`
@@ -131,12 +131,11 @@ notifyProgress(){
 copyQtLibrary(){
     echo -e "\t $1"
     if ls "$QT_LIBRARY_SOURCE_PATH/$1.so" &> /dev/null; then
-        cp -P $QT_LIBRARY_SOURCE_PATH/$1.so.? "$QT_LIBRARY_DEST_PATH/"
-        cp -P $QT_LIBRARY_SOURCE_PATH/$1.so.?.? "$QT_LIBRARY_DEST_PATH/"
-        cp -P $QT_LIBRARY_SOURCE_PATH/$1.so.?.?.? "$QT_LIBRARY_DEST_PATH/"
+        cp -P $QT_LIBRARY_SOURCE_PATH/$1.so "$QT_LIBRARY_DEST_PATH/"
+        cp -P $QT_LIBRARY_SOURCE_PATH/$1.so.* "$QT_LIBRARY_DEST_PATH/"
 
-        strip $QT_LIBRARY_DEST_PATH/$1.so.?.?.?
-        chmod 644 $QT_LIBRARY_DEST_PATH/$1.so.?.?.? # 644 = rw-r-r
+        strip $QT_LIBRARY_DEST_PATH/$1.so
+        chmod 644 $QT_LIBRARY_DEST_PATH/$1.so.* # 644 = rw-r-r
     else
         notifyError "$1 library not found in path: $QT_LIBRARY_SOURCE_PATH"
     fi
@@ -209,7 +208,7 @@ if $BUNDLE_QT; then
     copyQtPlugin platformthemes
     copyQtPlugin position
     copyQtPlugin printsupport
-    copyQtPlugin qtwebengine
+    #copyQtPlugin qtwebengine
     copyQtPlugin sceneparsers
     copyQtPlugin xcbglintegrations
 
@@ -219,14 +218,15 @@ if $BUNDLE_QT; then
     copyQtLibrary libQt5DBus
     copyQtLibrary libQt5Gui
     copyQtLibrary libQt5Multimedia
+    copyQtLibrary libQt5MultimediaGstTools
     copyQtLibrary libQt5MultimediaWidgets
     copyQtLibrary libQt5Network
     copyQtLibrary libQt5OpenGL
     copyQtLibrary libQt5Positioning
     copyQtLibrary libQt5PrintSupport
     copyQtLibrary libQt5Qml
+    copyQtLibrary libQt5QmlModels
     copyQtLibrary libQt5Quick
-    copyQtLibrary libQt5Script
     copyQtLibrary libQt5Sensors
     copyQtLibrary libQt5Sql
     copyQtLibrary libQt5Svg
@@ -238,7 +238,9 @@ if $BUNDLE_QT; then
     copyQtLibrary libQt5XcbQpa
     copyQtLibrary libQt5Xml
     copyQtLibrary libQt5XmlPatterns
-    copyQtLibrary libqgsttools_p
+    copyQtLibrary libicuuc
+    copyQtLibrary libicui18n
+    copyQtLibrary libicudata
 fi
 
 notifyProgress "Copying Qt translations"
@@ -325,8 +327,11 @@ if $BUNDLE_QT; then
         for lib in `dpkg -S  $l | grep -v "libqt5" | grep -v "qt55" | awk -F":" '{ print $1 }'`; do
             presence=`echo ${tab[*]} | grep -c "$lib"`;
             if [ "$presence" == "0" ]; then
-                tab[$count]=$lib;
-                ((count++));
+		if [ "$lib" != "openboard" ]; then
+			 echo "adding $lib to needed dependencies"
+        	        tab[$count]=$lib;
+        	        ((count++));
+		fi;
             fi;
         done;
     done;
@@ -347,10 +352,14 @@ for ((i=0;i<${#tab[@]};i++)); do
     if [ $i -ne "0" ]; then
         echo -n ", " >> "$CONTROL_FILE"
     fi
-    # conditional dependency when libavcodec-ffmpeg56 or libavcodec-ffmpeg-extra56 is found
-    depdVer=$(apt-cache show ${tab[$i]} | grep "Version: " | head -1 | awk '{ print $2 }' | sed -e 's/\([:. 0-9?]*\).*/\1/g' | sed -e 's/\.$//')
-    if [ "${tab[$i]}" == "libavcodec-ffmpeg56" ] || [ "${tab[$i]}" == "libavcodec-ffmpeg-extra56" ]; then
-      echo -n "libavcodec-ffmpeg56 (>= ${depdVer}) | libavcodec-ffmpeg-extra56 (>= ${depdVer})" >> "$CONTROL_FILE"
+    # conditional dependency when libavcodec is found
+    depdVer=$(apt-cache show ${tab[$i]} | grep "Version: " | head -1 | awk '{ print $2 }' | sed -e 's/\([~:. 0-9?]*\).*/\1/g' | sed -e 's/\.$//')
+    if [[ "${tab[$i]}" == *"libavcodec"* ]]; then
+        depName="${tab[$i]::-2}"
+        versionNumber="${tab[$i]: -2}"
+        depdVer_part1=`echo ${depdVer} | awk -F'.' '{print $1}'`
+        depdVer_part2=`echo ${depdVer} | awk -F'.' '{print $2}'`
+        echo -n "${depName}${versionNumber} (>= ${depdVer_part1}.${depdVer_part2}) | ${depName}-extra${versionNumber} (>= ${depdVer_part1}.${depdVer_part2})" >> "$CONTROL_FILE"
     else
       echo -n "${tab[$i]} (>= ${depdVer})" >> "$CONTROL_FILE"
     fi
@@ -365,6 +374,7 @@ if $BUNDLE_QT; then
     echo -n ",  libxcb-xkb1" >> "$CONTROL_FILE"
     echo -n ",  libxcb-image0" >> "$CONTROL_FILE"
     echo -n ",  libxcb-render-util0" >> "$CONTROL_FILE"
+    echo -n ",  libxcb-xinerama0" >> "$CONTROL_FILE"
 else
     echo -n ",  libqt5multimedia5-plugins" >> "$CONTROL_FILE"
 fi

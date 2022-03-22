@@ -30,7 +30,6 @@
 #include "UBBoardController.h"
 
 #include <QtWidgets>
-#include <QtWebKitWidgets>
 
 #include "frameworks/UBFileSystemUtils.h"
 #include "frameworks/UBPlatformUtils.h"
@@ -313,17 +312,21 @@ void UBBoardController::setupToolbar()
 
     UBToolbarButtonGroup *colorChoice =
             new UBToolbarButtonGroup(mMainWindow->boardToolBar, colorActions);
+    colorChoice->setLabel(tr("Color"));
 
     mMainWindow->boardToolBar->insertWidget(mMainWindow->actionBackgrounds, colorChoice);
 
     connect(settings->appToolBarDisplayText, SIGNAL(changed(QVariant)), colorChoice, SLOT(displayText(QVariant)));
     connect(colorChoice, SIGNAL(activated(int)), this, SLOT(setColorIndex(int)));
     connect(UBDrawingController::drawingController(), SIGNAL(colorIndexChanged(int)), colorChoice, SLOT(setCurrentIndex(int)));
+    connect(UBDrawingController::drawingController(), SIGNAL(colorIndexChanged(int)), UBDrawingController::drawingController(), SIGNAL(colorPaletteChanged()));
     connect(UBDrawingController::drawingController(), SIGNAL(colorPaletteChanged()), colorChoice, SLOT(colorPaletteChanged()));
     connect(UBDrawingController::drawingController(), SIGNAL(colorPaletteChanged()), this, SLOT(colorPaletteChanged()));
 
     colorChoice->displayText(QVariant(settings->appToolBarDisplayText->get().toBool()));
     colorChoice->colorPaletteChanged();
+    colorChoice->setCurrentIndex(settings->penColorIndex());
+    colorActions.at(settings->penColorIndex())->setChecked(true);
 
     // Setup line width choice widget
     QList<QAction *> lineWidthActions;
@@ -694,10 +697,15 @@ UBGraphicsItem *UBBoardController::duplicateItem(UBItem *item)
         mActiveScene->setURStackEnable(false);
         foreach(QGraphicsItem* pIt, children){
             UBItem* pItem = dynamic_cast<UBItem*>(pIt);
-            if(pItem){
+            if(pItem)
+            {
                 QGraphicsItem * itemToGroup = dynamic_cast<QGraphicsItem *>(duplicateItem(pItem));
                 if (itemToGroup)
+                {
+                    itemToGroup->setZValue(pIt->zValue());
+                    itemToGroup->setData(UBGraphicsItemData::ItemOwnZValue, pIt->data(UBGraphicsItemData::ItemOwnZValue).toReal());
                     duplicatedItems.append(itemToGroup);
+                }
             }
         }
         duplicatedGroup = mActiveScene->createGroup(duplicatedItems);
@@ -741,7 +749,7 @@ UBGraphicsItem *UBBoardController::duplicateItem(UBItem *item)
         return retItem;
     }
 
-    UBItem *createdItem = downloadFinished(true, sourceUrl, srcFile, contentTypeHeader, pData, itemPos, QSize(itemSize.width(), itemSize.height()), false);
+    UBItem *createdItem = downloadFinished(true, sourceUrl, QUrl::fromLocalFile(srcFile), contentTypeHeader, pData, itemPos, QSize(itemSize.width(), itemSize.height()), false);
     if (createdItem)
     {
         createdItem->setSourceUrl(item->sourceUrl());
@@ -772,6 +780,7 @@ void UBBoardController::deleteScene(int nIndex)
         scIndexes << nIndex;
         deletePages(scIndexes);
         selectedDocument()->setMetaData(UBSettings::documentUpdatedAt, UBStringUtils::toUtcIsoDateTime(QDateTime::currentDateTime()));
+        UBMetadataDcSubsetAdaptor::persist(selectedDocument());
 
         if (nIndex >= pageCount())
             nIndex = pageCount()-1;
@@ -1375,11 +1384,8 @@ UBItem *UBBoardController::downloadFinished(bool pSuccess, QUrl sourceUrl, QUrl 
             widgetItem->setSourceUrl(QUrl::fromLocalFile(widgetUrl));
             qDebug() << widgetItem->getOwnFolder();
             qDebug() << widgetItem->getSnapshotPath();
-            QString ownFolder = selectedDocument()->persistencePath() + "/" + UBPersistenceManager::widgetDirectory + "/" + widgetItem->uuid().toString() + ".wgt";
-            widgetItem->setOwnFolder(ownFolder);
-            QString adaptedUUid = widgetItem->uuid().toString().replace("{","").replace("}","");
-            ownFolder = ownFolder.replace(widgetItem->uuid().toString() + ".wgt", adaptedUUid + ".png");
-            widgetItem->setSnapshotPath(ownFolder);
+
+            widgetItem->setSnapshotPath(widgetItem->getOwnFolder());
 
             UBDrawingController::drawingController()->setStylusTool(UBStylusTool::Selector);
 
@@ -1395,8 +1401,11 @@ UBItem *UBBoardController::downloadFinished(bool pSuccess, QUrl sourceUrl, QUrl 
         qDebug() << "accepting mime type" << mimeType << "as PDF";
         qDebug() << "pdf data length: " << pData.size();
         qDebug() << "sourceurl : " + sourceUrl.toString();
+        QString sUrl = sourceUrl.toString();
+
         int result = 0;
-        if(!sourceUrl.isEmpty()){
+        if(!sourceUrl.isEmpty() && (sUrl.startsWith("file://") || sUrl.startsWith("/")))
+        {
             QStringList fileNames;
             fileNames << sourceUrl.toLocalFile();
             result = UBDocumentManager::documentManager()->addFilesToDocument(selectedDocument(), fileNames);
@@ -1409,6 +1418,7 @@ UBItem *UBBoardController::downloadFinished(bool pSuccess, QUrl sourceUrl, QUrl 
                 QStringList fileNames;
                 fileNames << pdfFile.fileName();
                 result = UBDocumentManager::documentManager()->addFilesToDocument(selectedDocument(), fileNames);
+                emit documentThumbnailsUpdated(this);
                 pdfFile.close();
             }
         }
@@ -1429,6 +1439,11 @@ UBItem *UBBoardController::downloadFinished(bool pSuccess, QUrl sourceUrl, QUrl 
         else if (sourceUrl.toString() == UBToolsManager::manager()->ruler.id)
         {
             mActiveScene->addRuler(pPos);
+            UBDrawingController::drawingController()->setStylusTool(UBStylusTool::Selector);
+        }
+        else if (sourceUrl.toString() == UBToolsManager::manager()->axes.id)
+        {
+            mActiveScene->addAxes(pPos);
             UBDrawingController::drawingController()->setStylusTool(UBStylusTool::Selector);
         }
         else if (sourceUrl.toString() == UBToolsManager::manager()->protractor.id)
@@ -1587,7 +1602,7 @@ void UBBoardController::setActiveDocumentScene(UBDocumentProxy* pDocumentProxy, 
 
     if(documentChange)
     {
-        UBGraphicsTextItem::lastUsedTextColor = QColor();
+        UBGraphicsTextItem::lastUsedTextColor = QColor(Qt::black);
     }
 
     if (sceneChange)
@@ -2170,13 +2185,13 @@ void UBBoardController::grabScene(const QRectF& pSceneRect)
         painter.setRenderHint(QPainter::Antialiasing);
 
         mActiveScene->setRenderingContext(UBGraphicsScene::NonScreen);
-        mActiveScene->setRenderingQuality(UBItem::RenderingQualityHigh);
+        mActiveScene->setRenderingQuality(UBItem::RenderingQualityHigh, UBItem::CacheNotAllowed);
 
         mActiveScene->render(&painter, targetRect, pSceneRect);
 
         mActiveScene->setRenderingContext(UBGraphicsScene::Screen);
 //        mActiveScene->setRenderingQuality(UBItem::RenderingQualityNormal);
-        mActiveScene->setRenderingQuality(UBItem::RenderingQualityHigh);
+        mActiveScene->setRenderingQuality(UBItem::RenderingQualityHigh, UBItem::CacheAllowed);
 
 
         mPaletteManager->addItem(QPixmap::fromImage(image));
@@ -2500,22 +2515,25 @@ void UBBoardController::togglePodcast(bool checked)
 void UBBoardController::moveGraphicsWidgetToControlView(UBGraphicsWidgetItem* graphicsWidget)
 {
     mActiveScene->setURStackEnable(false);
-    UBGraphicsItem *toolW3C = duplicateItem(dynamic_cast<UBItem *>(graphicsWidget));
+     UBGraphicsItem *toolW3C = duplicateItem(dynamic_cast<UBItem *>(graphicsWidget));
     UBGraphicsWidgetItem *copyedGraphicsWidget = NULL;
 
-    if (UBGraphicsWidgetItem::Type == toolW3C->type())
-        copyedGraphicsWidget = static_cast<UBGraphicsWidgetItem *>(toolW3C);
+    if (toolW3C)
+    {
+        if (UBGraphicsWidgetItem::Type == toolW3C->type())
+            copyedGraphicsWidget = static_cast<UBGraphicsWidgetItem *>(toolW3C);
 
-    UBToolWidget *toolWidget = new UBToolWidget(copyedGraphicsWidget, mControlView);
+        UBToolWidget *toolWidget = new UBToolWidget(copyedGraphicsWidget, mControlView);
 
-    graphicsWidget->remove(false);
-    mActiveScene->addItemToDeletion(graphicsWidget);
+        graphicsWidget->remove(false);
+        mActiveScene->addItemToDeletion(graphicsWidget);
 
-    mActiveScene->setURStackEnable(true);
+        mActiveScene->setURStackEnable(true);
 
-    QPoint controlViewPos = mControlView->mapFromScene(graphicsWidget->sceneBoundingRect().center());
-    toolWidget->centerOn(mControlView->mapTo(mControlContainer, controlViewPos));
-    toolWidget->show();
+        QPoint controlViewPos = mControlView->mapFromScene(graphicsWidget->sceneBoundingRect().center());
+        toolWidget->centerOn(mControlView->mapTo(mControlContainer, controlViewPos));
+        toolWidget->show();
+    }
 }
 
 
